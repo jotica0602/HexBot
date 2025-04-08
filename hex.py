@@ -1,7 +1,8 @@
 import os
 import re
 import random
-from hexbot import HexBot
+import time
+from player import HexBot
 
 # region GLOBALS
 
@@ -11,8 +12,6 @@ global BLUE
 global RESET
 global PLAYER_1
 global PLAYER_2
-global oo
-oo = float('inf')
 
 RED = '\033[31m'
 BLUE = '\033[34m'
@@ -126,12 +125,14 @@ def ai_vs_ai():
     bot1 = HexBot(PLAYER_1)
     bot2 = HexBot(PLAYER_2)
 
+    print_board(board)
     while True:
-        print_board(board)
+        start = time.time()
         i,j = bot1.play(board) if act == PLAYER_1 else bot2.play(board)
+        end = time.time()
         board.place_piece(i,j,act)
         act = PLAYER_2 if act == PLAYER_1 else PLAYER_1
-        print_board(board)
+        print_board(board,msg=f'Tiempo de reacción: {end - start}',clear=False),
         if check_win(board): break
         
 def print_path(board,player_id):
@@ -244,7 +245,7 @@ class HexBoard:
     
     def pretty_print(self) -> None:
         N = self.size
-        tab = 1
+        tab = 0
         for i in range(N):
             print(' ' * tab,end='')
             for j in range(N):
@@ -253,7 +254,8 @@ class HexBoard:
                 elif self.board[i][j] == 'R': print(f'{YELLOW}1{RESET} ',end='')                # Camino de victoria del jugador rojo
                 elif self.board[i][j] == 'B': print(f'{YELLOW}2{RESET} ',end='')                # Camino de victoria del jugador azul
                 else: print(f'{BLUE}{self.board[i][j]}{RESET} ', end='')                        # Si está tomada por el jugador azul imprimimos el '''''hexágono''''' en azul
-            tab += -1 if i%2 == 0 else 1
+            # tab += -1 if i%2 == 0 else 1
+            tab += 1
             print()     # Pasamos a la siguiente línea
         
         print() # Dejamos un espacio para el texto que siga

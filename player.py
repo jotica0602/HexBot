@@ -24,6 +24,7 @@ class HexBot(Player):
         dynamic_depth = self.get_dynamic_depth(board, len(pos_moves))
 
         # Determinamos el mejor movimiento
+        self.start_time = time.time()
         _, move = self.minimax(board, dynamic_depth, -infinity, infinity, True)
         return move
 
