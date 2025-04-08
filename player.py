@@ -1,0 +1,279 @@
+import random
+import heapq
+import time
+
+DIRECTIONS = [(-1, 0), (1, 0), (-1, 1), (1, -1), (0, -1), (0, 1)]
+TIME_LIMIT = 3.0
+infinity = float('inf')
+
+class Player:
+    def __init__(self, player_id: int):
+        self.player_id = player_id  # Tu identificador (1 o 2)
+
+    def play(self, board) -> tuple:
+        raise NotImplementedError("¡Implementa este método!")
+    
+class HexBot(Player):
+    def __init__(self, player_id: int):
+        super().__init__(player_id)
+        self.opponent = 2 if player_id == 1 else 1
+
+    def play(self, board) -> tuple:
+        # Determinar profundidad dinámica (cuántos niveles de jugadas se van a analizar en minimax)
+        pos_moves = board.get_possible_moves()
+        dynamic_depth = self.get_dynamic_depth(board, len(pos_moves))
+
+        # Determinamos el mejor movimiento
+        _, move = self.minimax(board, dynamic_depth, -infinity, infinity, True)
+        return move
+
+    def get_dynamic_depth(self, board, empty_cells) -> int:
+        '''
+        Analiza la fase actual del juego, lo que permite determinar la profundidad del minimax.
+        '''
+        total_cells = board.size * board.size
+        ratio = empty_cells / total_cells
+        if ratio > 0.8: return 3
+        elif ratio > 0.3: return 5
+        else: return 7
+
+    def minimax(self, board, depth, alpha, beta, maximizing_player):
+        '''
+        alpha: Mejor valor máximo que la IA puede asegurar.
+        beta: Mejor valor mínimo que la IA puede asegurar.
+        maximizing_player: Indica si es el turno de la IA.
+        '''
+
+        # Cortamos la evaluación si nos pasamos de tiempo
+        if time.time() - self.start_time > TIME_LIMIT: return self.evaluate(board), None
+
+        if board.check_connection(self.player_id):          return infinity, None               # Ganó el jugador virtual
+        elif board.check_connection(self.opponent):         return -infinity, None              # Ganó el oponente
+        elif depth == 0 or not board.get_possible_moves():  return self.evaluate(board), None
+
+        best_move = None
+        moves = board.get_possible_moves()
+
+        # Ordenar movimientos antes de evaluarlos (se ordenan según la heurística utilizada)
+        if maximizing_player: # Si estamos maximizando al jugador, ordenar jugadas por valores de mayor a menor según la heurística
+            moves.sort(key=lambda move: self.evaluate_after_move(board, move, self.player_id), reverse=True)
+        else:   # Si estamos minimizando, ordenar jugadas por valores de menor a mayor segun la heurística
+            moves.sort(key=lambda move: self.evaluate_after_move(board, move, self.opponent), reverse=False)
+
+        if maximizing_player:
+            max_eval = -infinity
+            for move in moves:
+                new_board = board.clone()
+                new_board.place_piece(*move, self.player_id)
+                eval, _ = self.minimax(new_board, depth - 1, alpha, beta, False)
+                if eval > max_eval:
+                    max_eval = eval
+                    best_move = move
+                alpha = max(alpha, eval)
+                # Si mi jugada actual no supera a la peor jugada del rival, no tiene sentido seguir explorando esa rama 
+                if beta <= alpha: break
+                
+            if best_move is None and moves:
+                # Si no se eligió jugada por poda u otra razón, elegimos una jugada para molestar al rival
+                fallback_move = self.defensive_fallback_move(board, moves)
+                return max_eval, fallback_move
+            
+            return max_eval, best_move
+        # Evaluando jugada: Caso turno de oponente
+        else:
+            min_eval = infinity
+            for move in moves:
+                new_board = board.clone()
+                new_board.place_piece(*move, self.opponent)
+                eval, _ = self.minimax(new_board, depth - 1, alpha, beta, True)
+                if eval < min_eval:
+                    min_eval = eval
+                    best_move = move
+                beta = min(beta, eval)
+                if beta <= alpha:
+                    break
+            if best_move is None and moves:
+                # Si no se eligió jugada por poda u otra razón, elegimos una jugada para molestar al rival
+                fallback_move = self.defensive_fallback_move(board, moves)
+                return min_eval, fallback_move
+            return min_eval, best_move
+
+    def evaluate_after_move(self, board, move, player_id): # Evalúa rápidamente un tablero como si el jugador hiciera esa jugada
+        temp_board = board.clone()
+        temp_board.place_piece(*move, player_id)
+        return self.evaluate(temp_board)
+
+    def neighbors(self, row, col, board):
+        dirs = DIRECTIONS
+        # Obteniendo vecinos
+        neighbors = []
+        size = board.size
+        for dr, dc in dirs:
+            nr, nc = row + dr, col + dc
+            if 0 <= nr < size and 0 <= nc < size:
+                neighbors.append((nr, nc))
+        return neighbors
+
+    def defensive_fallback_move(self, board, moves):
+        # Evalúa qué jugada complica más al oponente (minimiza su evaluación)
+        min_opponent_eval = infinity
+        best_defensive_move = None
+
+        for move in moves:
+            eval_for_opponent = self.evaluate_after_move(board, move, self.opponent)
+            if eval_for_opponent < min_opponent_eval:
+                min_opponent_eval = eval_for_opponent
+                best_defensive_move = move
+
+        # Si no encuentra jugada útil, elige una aleatoria como última opción
+        if best_defensive_move is None and moves:
+            best_defensive_move = random.choice(moves)
+
+        return best_defensive_move
+        
+    def evaluate(self, board) -> float:
+        size = board.size
+        score = 0
+        empty_cells = []
+
+        # Empieza buscando cada celda del jugador y del enemigo, sumando y restando puntos
+        for row in range(size):
+            for col in range(size):
+                cell = board.board[row][col]
+                if cell == self.player_id: score += 10
+                elif cell == self.opponent: score -= 10
+                else: empty_cells.append((row, col))  # Guarda las casillas vacías para análisis posterior
+
+        # A*
+        my_path_cost = self.a_star(board, self.player_id)
+        opp_path_cost = self.a_star(board, self.opponent)
+        if opp_path_cost <= 3: score -= 300  # Penalización fuerte si el oponente casi conecta
+        if my_path_cost != infinity: score += 1000 / (1 + my_path_cost)  # Mientras más costoso sea el camino, menor es la puntuación
+        if opp_path_cost != infinity: score -= 1000 / (1 + opp_path_cost) # Lo mismo para el análisis del jugador contrario
+
+        # Centralidad y vecinos
+        mid = size // 2
+        for (r, c) in empty_cells:
+            # Cada casilla vacía cerca del centro aumenta el valor (posibles movimientos futuros)
+            dist_center = abs(r - mid) + abs(c - mid)
+            centrality_bonus = max(0, (size - dist_center))
+            score += centrality_bonus * 0.5
+            # Aumenta o disminuye el peso de una casilla vacía en dependencia de sus vecinos
+            friendly = 0
+            enemy = 0
+            for nr, nc in self.neighbors(r, c, board):
+                neighbor = board.board[nr][nc]
+                if neighbor == self.player_id: friendly += 1
+                elif neighbor == self.opponent: enemy += 1
+            score += friendly * 1.5
+            score -= enemy * 1.5
+
+        # Bloqueo estratégico del oponente
+        for row in range(size):
+            for col in range(size):
+                cell = board.board[row][col]
+                if cell == self.player_id:
+                    # Detectar si esta ficha bloquea una dirección "natural" del oponente
+                    # Jugador 1: izquierda a derecha → bloqueamos en columnas
+                    # Jugador 2: arriba a abajo → bloqueamos en filas
+
+                    if self.opponent == 1:
+                        importance = col/size
+                        # Buscamos si esta ficha está rodeada por fichas enemigas horizontalmente
+                        if col > 0 and col < size - 1:
+                            if (board.board[row][col - 1] == self.opponent and
+                                board.board[row][col + 1] == self.opponent):
+                                score += 30 + (importance*10) # Ajustable según la importancia del bloqueo
+                    else:
+                        importance = row/size
+                        # Buscamos si está rodeada verticalmente
+                        if row > 0 and row < size - 1:
+                            if (board.board[row - 1][col] == self.opponent and
+                                board.board[row + 1][col] == self.opponent):
+                                score += 30 + (importance*10)
+
+        # Evaluación de cadenas conectadas
+        chains_player = self.find_chains(board, self.player_id)
+        chains_opponent = self.find_chains(board, self.opponent)
+
+        # Recompensa cadenas largas propias
+        for chain in chains_player:
+            chain_length = len(chain)
+            score += 50 * chain_length
+
+        # Penaliza las cadenas largas del oponente
+        for chain in chains_opponent:
+            chain_length = len(chain)
+            score -= 50 * chain_length        
+
+        return score
+
+    def a_star(self, board, player_id):  # Devuelve el costo mínimo de unir dos lados
+        size = board.size
+        visited = set()
+        heap = []
+        cost_so_far = {}    # Para evitar caminos peores y no volver a insertar caminos más costosos de forma innecesaria
+
+        def heuristic(row, col): # Heurística: distancia Manhattan al borde opuesto
+            return size - 1 - (col if player_id == 1 else row)
+
+        def is_goal(row, col): # Verifica si llegamos al lado opuesto
+            return (col == size - 1) if player_id == 1 else (row == size - 1)
+
+        # Inicialmente se guardan las casillas que tocan uno de los lados en el espacio de búsqueda
+        for i in range(size):
+            row, col = (i, 0) if player_id == 1 else (0, i)
+            cell = board.board[row][col]
+            
+            if cell == player_id: cost = 0  # Costo cero para casillas propias
+            elif cell == 0: cost = 1        # Costo uno para casillas vacías
+            else: continue                  # Casilla del oponente, no válida para iniciar
+            
+            heapq.heappush(heap, (cost + heuristic(row, col), cost, row, col))
+            cost_so_far[(row, col)] = cost
+
+        # Analizando espacio de búsqueda
+        while heap:
+            _, cost, row, col = heapq.heappop(heap)
+            if (row, col) in visited: continue
+            
+            visited.add((row, col))
+            
+            if is_goal(row, col): return cost
+
+            for nr, nc in self.neighbors(row, col, board):
+                if (nr, nc) in visited: continue
+                cell = board.board[nr][nc]
+                if cell == player_id: new_cost = cost   # Paso gratis
+                elif cell == 0: new_cost = cost + 1     # Paso leve
+                else: new_cost = cost + 5               # Penalización fuerte
+                if (nr, nc) not in cost_so_far or new_cost < cost_so_far[(nr, nc)]:
+                    cost_so_far[(nr, nc)] = new_cost
+                    heapq.heappush(heap, (new_cost + heuristic(nr, nc), new_cost, nr, nc))
+
+        return infinity  # No hay camino posible
+
+    def find_chains(self, board, player_id: int):
+        # Encuentra todas las cadenas conectadas del jugador
+        size = board.size
+        visited = set()
+        chains = []
+
+        def dfs(row, col, chain):
+            if (row, col) in visited or not (0 <= row < size and 0 <= col < size):
+                return
+            if board.board[row][col] == player_id:
+                visited.add((row, col))
+                chain.append((row, col))
+                for nr, nc in self.neighbors(row, col, board):
+                    dfs(nr, nc, chain)
+
+        for row in range(size):
+            for col in range(size):
+                if (row, col) not in visited and board.board[row][col] == player_id:
+                    chain = []
+                    dfs(row, col, chain)
+                    if chain:
+                        chains.append(chain)
+
+        return chains
