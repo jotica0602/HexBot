@@ -2,7 +2,7 @@ import random
 import heapq
 import time
 
-DIRECTIONS = [(-1, 0), (1, 0), (-1, 1), (1, -1), (0, -1), (0, 1)]
+DIRECTIONS = [(0, -1),(0, 1),(-1, 0),(1, 0),(-1, 1),(1, -1)]
 TIME_LIMIT = 3.0
 infinity = float('inf')
 
