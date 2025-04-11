@@ -3,7 +3,7 @@ import heapq
 import time
 
 DIRECTIONS = [(0, -1),(0, 1),(-1, 0),(1, 0),(-1, 1),(1, -1)]
-TIME_LIMIT = 3.0
+TIME_LIMIT = 9.0
 infinity = float('inf')
 
 class Player:
