@@ -200,7 +200,7 @@ class HexBoard:
         parent = {(i,j):None for i in range(N) for j in range(N)}
         visited[(0,N)] = visited[(N,0)] = False 
         
-        # Los vértices ficticios sobre los que se hará el BFS son (0,N) y (N,0) respectivamente en dependencia de si el jugador es rojo o azul
+        # Los vértices ficticios sobre los que se hará el BFS son (0,-1),(-1,0) respectivamente en dependencia de si el jugador es rojo o azul
         
         start = (0,-1) if player_id == PLAYER_1 else (-1,0)
         q = [start]
@@ -221,18 +221,22 @@ class HexBoard:
             if v == (-1,0) and player_id == PLAYER_2: return [(0,j) for j in range(N) if self.board[0][j] == player_id]
                 
             vx,vy = v
-            even = [(0,-1),(0,1),(-1,0),(1,0),(-1,1),(1,1)]
-            odd =  [(0,-1),(0,1),(-1,0),(1,0),(-1,-1),(1,-1)]
+            # even = [(0,-1),(0,1),(-1,0),(1,0),(-1,1),(1,1)]
+            # odd =  [(0,-1),(0,1),(-1,0),(1,0),(-1,-1),(1,-1)]
+            dirs = [(0, -1),(0, 1),(-1, 0),(1, 0),(-1, 1),(1, -1)]
             
             neighbors = []
-            if vx % 2 == 0:
-                for delta_x,delta_y in even:
-                    nx,ny = vx + delta_x, vy + delta_y
-                    if self.is_valid(nx,ny) and self.board[nx][ny] == player_id: neighbors.append((nx,ny))
-            else:
-                for delta_x,delta_y in odd:
-                    nx,ny = vx + delta_x, vy + delta_y
-                    if self.is_valid(nx,ny) and self.board[nx][ny] == player_id: neighbors.append((nx,ny))
+            for delta_x,delta_y in dirs:
+                nx,ny = vx + delta_x, vy + delta_y
+                if self.is_valid(nx,ny) and self.board[nx][ny] == player_id: neighbors.append((nx,ny))
+            # if vx % 2 == 0:
+            #     for delta_x,delta_y in even:
+            #         nx,ny = vx + delta_x, vy + delta_y
+            #         if self.is_valid(nx,ny) and self.board[nx][ny] == player_id: neighbors.append((nx,ny))
+            # else:
+            #     for delta_x,delta_y in odd:
+            #         nx,ny = vx + delta_x, vy + delta_y
+            #         if self.is_valid(nx,ny) and self.board[nx][ny] == player_id: neighbors.append((nx,ny))
             
             if vy == N-1 and player_id == PLAYER_1: neighbors.append((0,N))
             if vx == N-1 and player_id == PLAYER_2: neighbors.append((N,0))
